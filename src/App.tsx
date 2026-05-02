@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { hasSupabaseEnv, supabase } from './lib/supabase'
@@ -25,6 +25,7 @@ function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [snapshots, setSnapshots] = useState<Snapshot[]>([])
   const [researchStatus, setResearchStatus] = useState('Loading datasets...')
+  const [researchLoading, setResearchLoading] = useState(false)
   const [patientStatus, setPatientStatus] = useState('Sign in to manage patient profile.')
   const [clinicianStatus, setClinicianStatus] = useState('Sign in to view care team.')
   const [mohapStatus, setMohapStatus] = useState('Ready.')
@@ -38,6 +39,30 @@ function App() {
   })
 
   const currentUserId = useMemo(() => session?.user?.id ?? null, [session])
+
+  const loadResearchSnapshots = useCallback(async () => {
+    if (!supabase) return
+    setResearchLoading(true)
+
+    const { data, error } = await supabase
+      .schema('external')
+      .from('dataset_snapshots')
+      .select('id, source, dataset, fetched_at')
+      .order('fetched_at', { ascending: false })
+      .limit(8)
+
+    if (error) {
+      setResearchStatus(
+        `Could not load snapshots: ${error.message}. If this persists, verify database grants for external schema.`,
+      )
+      setResearchLoading(false)
+      return
+    }
+
+    setSnapshots(data ?? [])
+    setResearchStatus(data && data.length > 0 ? 'Recent ingestions loaded.' : 'No ingestions found yet.')
+    setResearchLoading(false)
+  }, [])
 
   useEffect(() => {
     async function checkSupabase() {
@@ -72,27 +97,8 @@ function App() {
   }, [])
 
   useEffect(() => {
-    async function loadResearchSnapshots() {
-      if (!supabase) return
-
-      const { data, error } = await supabase
-        .schema('external')
-        .from('dataset_snapshots')
-        .select('id, source, dataset, fetched_at')
-        .order('fetched_at', { ascending: false })
-        .limit(8)
-
-      if (error) {
-        setResearchStatus(`Could not load snapshots: ${error.message}`)
-        return
-      }
-
-      setSnapshots(data ?? [])
-      setResearchStatus(data && data.length > 0 ? 'Recent ingestions loaded.' : 'No ingestions found yet.')
-    }
-
     void loadResearchSnapshots()
-  }, [])
+  }, [loadResearchSnapshots, currentUserId])
 
   useEffect(() => {
     async function loadPatientProfile() {
@@ -153,7 +159,15 @@ function App() {
     if (!supabase) return
 
     setStatus('Sending magic link...')
-    const { error } = await supabase.auth.signInWithOtp({ email })
+    const emailRedirectTo =
+      typeof window !== 'undefined' ? `${window.location.origin}/` : undefined
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo,
+      },
+    })
     if (error) {
       setStatus(`Sign in failed: ${error.message}`)
       return
@@ -259,7 +273,12 @@ function App() {
 
       <section className="card">
         <h2>Research Dashboard</h2>
-        <p className="status">{researchStatus}</p>
+        <div className="row">
+          <p className="status">{researchStatus}</p>
+          <button type="button" onClick={() => void loadResearchSnapshots()} disabled={researchLoading}>
+            {researchLoading ? 'Refreshing...' : 'Refresh'}
+          </button>
+        </div>
         {snapshots.length > 0 ? (
           <ul className="list">
             {snapshots.map((snapshot) => (
