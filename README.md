@@ -1,3 +1,14 @@
+# UAE Diabetes Platform (Claude Baseline Reset)
+
+This repository has been reset to the Claude baseline scaffold.
+
+Authoritative baseline artifacts are in:
+- `files/BUILD_GUIDE_PHASE_1.md`
+- `files/.cursorrules`
+- `files/001_initial_schema.sql`
+- `files/cursor_prompts.md`
+
+Follow the build guide steps in order to continue implementation.
 # DM Twin
 
 Standalone React + TypeScript + Vite project configured for:

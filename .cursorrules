@@ -117,3 +117,24 @@ If a request would:
 ## Documentation
 
 Every major decision lives in `docs/adr/NNN-title.md` (Architecture Decision Records). When you make an architecturally significant choice, write the ADR alongside the code. Format: Context, Decision, Consequences.
+Stack:
+- Frontend: React + TypeScript (Vite)
+- Backend data platform: Supabase (Postgres, Auth, RLS, Edge Functions)
+- Deploy: Netlify
+- ML service: Python FastAPI (separate runtime)
+
+Database constraints:
+- All schema changes must be migration files under `supabase/migrations`.
+- Never rely on manual dashboard-only schema edits.
+- Keep production tables in logical schemas: `external`, `clinical`, `research`, `audit`.
+
+Security and privacy:
+- Treat all `clinical.*` data as PHI-sensitive.
+- Never log PHI, access tokens, or raw identifiers to console or analytics.
+- Enforce and preserve Row Level Security policies on all clinical and research-access tables.
+- Prefer de-identified outputs in `research.*`; avoid exposing direct identifiers.
+
+Coding rules:
+- Use typed clients where available.
+- Keep ingest functions source-specific and idempotent where possible.
+- Store model predictions with explicit `model_name` and `model_version`.
