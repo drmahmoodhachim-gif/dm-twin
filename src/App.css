@@ -1,5 +1,5 @@
 .app-shell {
-  max-width: 720px;
+  max-width: 1000px;
   margin: 0 auto;
   padding: 3rem 1.25rem;
 }
@@ -21,7 +21,55 @@
   color: var(--text-h);
 }
 
-ol {
-  margin: 0.5rem 0 0;
+.row {
+  margin-top: 0.75rem;
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.meta {
+  margin: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.stack {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+}
+
+.list {
+  margin: 0.7rem 0 0;
   padding-left: 1.2rem;
+}
+
+input,
+button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+}
+
+button {
+  background: var(--text-h);
+  color: #fff;
+  cursor: pointer;
+}
+
+button:hover {
+  opacity: 0.92;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
 }
