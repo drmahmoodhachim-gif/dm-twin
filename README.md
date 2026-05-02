@@ -1,6 +1,7 @@
 # DM Twin
 
 Standalone React + TypeScript + Vite project configured for:
+
 - GitHub source control
 - Netlify deployment
 - Supabase integration
@@ -26,5 +27,22 @@ VITE_SUPABASE_ANON_KEY=
 ## Build and deploy
 
 Netlify config is in `netlify.toml`:
+
 - Build command: `npm run build`
 - Publish directory: `dist`
+
+## Supabase foundation
+
+This repo now includes:
+
+- `supabase/migrations/20260502191500_foundation.sql`
+- `supabase/functions/mohap-ingest/index.ts`
+- `docs/architecture.md`
+
+Run the SQL migration in your Supabase project (SQL editor or CLI migration flow), then deploy the edge function.
+
+Required edge function secrets:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `MOHAP_DIABETES_SOURCE_URL` (optional override)

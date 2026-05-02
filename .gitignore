@@ -26,5 +26,6 @@ dist-ssr
 *.sln
 *.sw?
 
-# Local Netlify folder
+# Local tool state
 .netlify
+supabase/.temp

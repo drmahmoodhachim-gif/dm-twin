@@ -1,0 +1,119 @@
+# UAE Diabetes Research Platform — Cursor Project Rules
+
+You are assisting on a healthcare research platform for diabetes researchers, clinicians, and patients in the UAE. This is **regulated health software**. Take security and correctness seriously.
+
+## Stack (do not deviate without asking)
+
+- **Monorepo:** pnpm workspaces
+- **Frontend:** Next.js 15 App Router, TypeScript (strict), Tailwind CSS, shadcn/ui
+- **Backend:** Supabase (Postgres 15+, Auth, Edge Functions on Deno, Storage, Realtime)
+- **Twin service:** Python 3.11+ FastAPI, deployed separately (Modal / Fly.io). Not Netlify Functions.
+- **Hosting:** Netlify (frontend), Supabase (backend), Modal/Fly (twin)
+- **Package manager:** pnpm only — never npm or yarn in this repo
+- **Node:** 20 LTS
+
+## Folder structure
+
+```
+apps/
+  web/            Next.js app (researcher + clinician + patient portals as route groups)
+  twin/           Python FastAPI service for the digital twin
+  ingest/         Standalone ingestion jobs that don't fit as Edge Functions
+packages/
+  db/             Generated Supabase types + shared DB helpers
+  shared/         Shared TS types, validation schemas (zod), constants
+supabase/
+  migrations/     SQL migrations, timestamped
+  functions/      Supabase Edge Functions (Deno + TS)
+docs/             Architecture notes, decisions (ADRs), data dictionaries
+```
+
+When adding a new Edge Function, create it under `supabase/functions/<name>/index.ts` using Deno + TypeScript.
+
+## Database conventions
+
+- **Three logical schemas:** `external` (ingested public data), `clinical` (PHI), `research` (de-identified views)
+- **RLS is mandatory** on every table in `clinical` and `research`. Never disable it. Never bypass with the service-role key from the frontend.
+- **Naming:** snake_case tables and columns, plural table names (`cgm_readings`, `lab_results`)
+- **Every clinical table has:** `id uuid pk`, `created_at timestamptz`, `updated_at timestamptz`, `created_by uuid references auth.users`
+- **Every clinical table has a corresponding audit trigger** writing to `audit.access_log`
+- **Migrations are append-only** — never edit a committed migration. Create a new one.
+- **Always update `packages/db/types.ts`** after a migration: `pnpm types`
+
+## Security — non-negotiable
+
+1. **Never log PHI.** No `console.log(patient)`, no `console.log(request.body)` in clinical paths. Use a structured logger that redacts `clinical.*` fields.
+2. **Never use the service-role key in frontend code.** It only lives in Edge Functions and the twin service's server env.
+3. **Never put secrets in git.** Check before commit. `.env.local`, `.env.production`, any file with `_KEY` or `_SECRET` is gitignored.
+4. **Never put PHI in URL parameters.** Use POST bodies or signed URLs.
+5. **Never disable RLS** to "make a query work." Fix the policy or use a security-definer function.
+6. **Emirates ID, passport numbers, and other UAE PHI** are stored hashed (per-tenant salt) unless absolutely needed. Display as `***NNNN` (last 4) by default.
+7. **De-identification for `research.*` views:** strip dates to month-year, ages over 89 collapse to "90+", remove free-text notes, k-anonymity check before exposing.
+8. **No third-party analytics** (Google Analytics, Hotjar, etc.) on any page that handles `clinical.*` data.
+
+## TypeScript conventions
+
+- `strict: true`, `noUncheckedIndexedAccess: true` in tsconfig
+- Use generated types from `packages/db/types.ts` — don't redeclare table shapes
+- Validate every API input with `zod` schemas in `packages/shared/schemas`
+- Never use `any`. Use `unknown` and narrow.
+- Discriminated unions for state machines (twin states, encounter types, etc.)
+- Server actions and route handlers must validate auth + role before any DB call
+
+## React / Next.js conventions
+
+- App Router only; no Pages Router
+- Server Components by default; `'use client'` only when needed (interactivity, hooks)
+- Data fetching: prefer Server Components calling Supabase server client; use Server Actions for mutations
+- Forms: `react-hook-form` + `zod` resolver; never trust client-side validation alone
+- UI primitives: shadcn/ui, installed component-by-component (not as a dep)
+- Charts: Recharts for simple, visx or D3 for custom
+- Tables with thousands of rows: TanStack Table with virtualization
+
+## Python (twin service) conventions
+
+- FastAPI + pydantic v2
+- `uv` for dependency management (`pyproject.toml`)
+- All endpoints require a service token in `Authorization` header (validate against env)
+- Models stored versioned in S3 / Supabase Storage; load on startup, hot-reload via signal
+- Every prediction call writes a row to `clinical.twin_predictions` via Supabase REST with service-role key
+- Inference is sync for now; move to background jobs (Celery/RQ) only when needed
+
+## When generating code, you must
+
+1. **Read existing files in the relevant folder first** before writing new ones — match conventions
+2. **Use the generated DB types** from `packages/db/types.ts`
+3. **Show the migration SQL** when changing the schema, not just the TS code
+4. **Mention the RLS policy** every time you create a new clinical or research table
+5. **Add a brief comment** at the top of new files describing purpose and any PHI handling
+6. **Prefer composition over abstraction** — don't add framework-y wrapper layers until there's a second use case
+
+## When generating code, you must NOT
+
+- Generate UI without checking `frontend-design` guidance for that feature (asked for a dashboard? confirm aesthetic direction before producing 600 lines of generic Tailwind)
+- Use Inter, Roboto, or generic system fonts as the primary brand font — pick distinctive ones for this medical/research context
+- Add packages without justifying the dependency cost
+- Write tests for trivial code; do write tests for: RLS policies, data ingestion normalization, twin model I/O contracts, de-identification logic
+- Suggest deploying the twin service to Netlify or Vercel — those won't work for our ML inference
+
+## Clinical correctness
+
+- **Glucose units:** UAE clinicians use mmol/L. Internally store mg/dL but display mmol/L by default with a per-user toggle. Conversion: mg/dL ÷ 18.018 = mmol/L.
+- **HbA1c:** display both DCCT (%) and IFCC (mmol/mol). Conversion: IFCC = (DCCT − 2.15) × 10.929.
+- **Time in Range:** standard targets are 70–180 mg/dL (3.9–10.0 mmol/L) for most adults, narrower for pregnancy.
+- **Never display a twin prediction without:** model version, confidence interval, "research/educational use only — not for clinical decisions" caveat (until we have prospective validation + regulatory clearance).
+
+## Ask, don't assume
+
+If a request would:
+- Touch RLS policies
+- Add a new third-party data source
+- Change the de-identification rules
+- Add a new external dependency above 100kb gzipped
+- Modify the twin service's I/O contract
+
+…then propose the change and wait for confirmation before implementing.
+
+## Documentation
+
+Every major decision lives in `docs/adr/NNN-title.md` (Architecture Decision Records). When you make an architecturally significant choice, write the ADR alongside the code. Format: Context, Decision, Consequences.
