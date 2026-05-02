@@ -15,19 +15,6 @@ as $$
   select coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '');
 $$;
 
-create or replace function public.is_clinician_for_patient(target_patient_id uuid)
-returns boolean
-language sql
-stable
-as $$
-  select exists (
-    select 1
-    from clinical.care_team ct
-    where ct.patient_id = target_patient_id
-      and ct.clinician_id = auth.uid()
-  );
-$$;
-
 create table if not exists external.dataset_snapshots (
   id uuid primary key default gen_random_uuid(),
   source text not null,
@@ -77,6 +64,19 @@ create table if not exists clinical.care_team (
   created_at timestamptz not null default now(),
   unique (patient_id, clinician_id)
 );
+
+create or replace function public.is_clinician_for_patient(target_patient_id uuid)
+returns boolean
+language sql
+stable
+as $$
+  select exists (
+    select 1
+    from clinical.care_team ct
+    where ct.patient_id = target_patient_id
+      and ct.clinician_id = auth.uid()
+  );
+$$;
 
 create table if not exists clinical.cgm_reading (
   id uuid primary key default gen_random_uuid(),
