@@ -1,0 +1,5 @@
+[build]
+  command = "pnpm --filter web build"
+
+[build.environment]
+  NODE_VERSION = "20"
