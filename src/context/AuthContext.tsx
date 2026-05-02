@@ -7,6 +7,7 @@ type AuthContextValue = AuthState & {
   signInWithMagicLink: (email: string) => Promise<void>
   signOut: () => Promise<void>
   setAuthStatus: (value: string) => void
+  otpCooldownSeconds: number
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -26,6 +27,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(true)
   const [connectionStatus, setConnectionStatus] = useState('Checking connection...')
   const [authStatus, setAuthStatus] = useState('')
+  const [otpCooldownSeconds, setOtpCooldownSeconds] = useState(0)
+
+  useEffect(() => {
+    if (otpCooldownSeconds <= 0) return
+
+    const timer = window.setInterval(() => {
+      setOtpCooldownSeconds((prev) => (prev > 0 ? prev - 1 : 0))
+    }, 1000)
+
+    return () => window.clearInterval(timer)
+  }, [otpCooldownSeconds])
 
   useEffect(() => {
     async function bootstrap() {
@@ -81,6 +93,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   async function signInWithMagicLink(email: string) {
     if (!supabase) return
+    if (otpCooldownSeconds > 0) {
+      setAuthStatus(`Please wait ${otpCooldownSeconds}s before requesting another magic link.`)
+      return
+    }
+
     setAuthStatus('Sending magic link...')
     const emailRedirectTo =
       typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined
@@ -89,9 +106,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
       options: { emailRedirectTo },
     })
     if (error) {
+      if (error.message.toLowerCase().includes('rate limit')) {
+        setOtpCooldownSeconds(60)
+        setAuthStatus('Sign in failed: email rate limit exceeded. Please wait 60s and try again.')
+        return
+      }
       setAuthStatus(`Sign in failed: ${error.message}`)
       return
     }
+    setOtpCooldownSeconds(60)
     setAuthStatus('Magic link sent. Check your email to sign in.')
   }
 
@@ -115,8 +138,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
       signInWithMagicLink,
       signOut,
       setAuthStatus,
+      otpCooldownSeconds,
     }),
-    [session, role, loading, connectionStatus, authStatus],
+    [session, role, loading, connectionStatus, authStatus, otpCooldownSeconds],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -4,7 +4,14 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export function AuthPage() {
-  const { session, connectionStatus, authStatus, signInWithMagicLink, setAuthStatus } = useAuth()
+  const {
+    session,
+    connectionStatus,
+    authStatus,
+    signInWithMagicLink,
+    setAuthStatus,
+    otpCooldownSeconds,
+  } = useAuth()
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -41,8 +48,12 @@ export function AuthPage() {
               required
             />
           </div>
-          <button type="submit" disabled={loading}>
-            {loading ? 'Sending...' : 'Send magic link'}
+          <button type="submit" disabled={loading || otpCooldownSeconds > 0}>
+            {loading
+              ? 'Sending...'
+              : otpCooldownSeconds > 0
+                ? `Retry in ${otpCooldownSeconds}s`
+                : 'Send magic link'}
           </button>
         </form>
         {authStatus ? <p className="status">{authStatus}</p> : null}
