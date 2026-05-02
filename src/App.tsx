@@ -19,17 +19,21 @@ type PatientProfileForm = {
   diagnosis_date: string
 }
 
+const CURRENT_YEAR = new Date().getFullYear()
+
 function App() {
-  const [status, setStatus] = useState('Checking connection...')
+  const [connectionStatus, setConnectionStatus] = useState('Checking connection...')
+  const [authStatus, setAuthStatus] = useState('')
   const [email, setEmail] = useState('')
+  const [authLoading, setAuthLoading] = useState(false)
   const [session, setSession] = useState<Session | null>(null)
+
   const [snapshots, setSnapshots] = useState<Snapshot[]>([])
-  const [researchStatus, setResearchStatus] = useState('Loading datasets...')
+  const [researchStatus, setResearchStatus] = useState('Sign in to load datasets.')
   const [researchLoading, setResearchLoading] = useState(false)
+
   const [patientStatus, setPatientStatus] = useState('Sign in to manage patient profile.')
-  const [clinicianStatus, setClinicianStatus] = useState('Sign in to view care team.')
-  const [mohapStatus, setMohapStatus] = useState('Ready.')
-  const [careTeamRows, setCareTeamRows] = useState<Array<{ patient_id: string; relationship: string }>>([])
+  const [patientSaving, setPatientSaving] = useState(false)
   const [profileForm, setProfileForm] = useState<PatientProfileForm>({
     display_name: '',
     birth_year: '',
@@ -38,23 +42,26 @@ function App() {
     diagnosis_date: '',
   })
 
+  const [clinicianStatus, setClinicianStatus] = useState('Sign in to view care team.')
+  const [careTeamRows, setCareTeamRows] = useState<Array<{ patient_id: string; relationship: string }>>([])
+
+  const [mohapStatus, setMohapStatus] = useState('Sign in to run ingestion.')
+  const [mohapLoading, setMohapLoading] = useState(false)
+
   const currentUserId = useMemo(() => session?.user?.id ?? null, [session])
 
   const loadResearchSnapshots = useCallback(async () => {
-    if (!supabase) return
+    if (!supabase || !session) return
     setResearchLoading(true)
 
     const { data, error } = await supabase
-      .schema('external')
-      .from('dataset_snapshots')
+      .from('dataset_snapshots_public')
       .select('id, source, dataset, fetched_at')
       .order('fetched_at', { ascending: false })
       .limit(8)
 
     if (error) {
-      setResearchStatus(
-        `Could not load snapshots: ${error.message}. If this persists, verify database grants for external schema.`,
-      )
+      setResearchStatus(`Could not load snapshots: ${error.message}`)
       setResearchLoading(false)
       return
     }
@@ -62,23 +69,23 @@ function App() {
     setSnapshots(data ?? [])
     setResearchStatus(data && data.length > 0 ? 'Recent ingestions loaded.' : 'No ingestions found yet.')
     setResearchLoading(false)
-  }, [])
+  }, [session])
 
   useEffect(() => {
     async function checkSupabase() {
       if (!supabase) {
-        setStatus('Supabase env vars are not configured yet.')
+        setConnectionStatus('Supabase env vars are not configured yet.')
         return
       }
 
       const { data, error } = await supabase.auth.getSession()
       if (error) {
-        setStatus(`Supabase connected but returned: ${error.message}`)
+        setConnectionStatus(`Supabase connected but returned: ${error.message}`)
         return
       }
 
       setSession(data.session)
-      setStatus('Supabase is connected and ready.')
+      setConnectionStatus('Supabase is connected and ready.')
     }
 
     void checkSupabase()
@@ -97,8 +104,14 @@ function App() {
   }, [])
 
   useEffect(() => {
+    if (!session) {
+      setSnapshots([])
+      setResearchStatus('Sign in to load datasets.')
+      return
+    }
+
     void loadResearchSnapshots()
-  }, [loadResearchSnapshots, currentUserId])
+  }, [loadResearchSnapshots, session])
 
   useEffect(() => {
     async function loadPatientProfile() {
@@ -150,44 +163,51 @@ function App() {
       setClinicianStatus(data && data.length > 0 ? 'Care team loaded.' : 'No patients linked yet.')
     }
 
+    if (!currentUserId) {
+      setPatientStatus('Sign in to manage patient profile.')
+      setClinicianStatus('Sign in to view care team.')
+      setMohapStatus('Sign in to run ingestion.')
+      setCareTeamRows([])
+      return
+    }
+
     void loadPatientProfile()
     void loadCareTeam()
   }, [currentUserId])
 
   async function handleSignIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!supabase) return
+    if (!supabase || !email.trim()) return
 
-    setStatus('Sending magic link...')
-    const emailRedirectTo =
-      typeof window !== 'undefined' ? `${window.location.origin}/` : undefined
+    setAuthLoading(true)
+    setAuthStatus('Sending magic link...')
 
+    const emailRedirectTo = typeof window !== 'undefined' ? `${window.location.origin}/` : undefined
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: {
-        emailRedirectTo,
-      },
+      options: { emailRedirectTo },
     })
+
     if (error) {
-      setStatus(`Sign in failed: ${error.message}`)
+      setAuthStatus(`Sign in failed: ${error.message}`)
+      setAuthLoading(false)
       return
     }
 
-    setStatus('Magic link sent. Check your email to sign in.')
+    setAuthStatus('Magic link sent. Check your email to sign in.')
+    setAuthLoading(false)
   }
 
   async function handleSignOut() {
     if (!supabase) return
     const { error } = await supabase.auth.signOut()
     if (error) {
-      setStatus(`Sign out failed: ${error.message}`)
+      setAuthStatus(`Sign out failed: ${error.message}`)
       return
     }
 
-    setPatientStatus('Sign in to manage patient profile.')
-    setClinicianStatus('Sign in to view care team.')
+    setAuthStatus('')
     setSession(null)
-    setStatus('Signed out.')
   }
 
   async function handlePatientSave(event: FormEvent<HTMLFormElement>) {
@@ -198,7 +218,13 @@ function App() {
     }
 
     const birthYearValue = profileForm.birth_year.trim() ? Number(profileForm.birth_year.trim()) : null
+    if (!birthYearValue || birthYearValue < 1900 || birthYearValue > CURRENT_YEAR) {
+      setPatientStatus(`Birth year must be between 1900 and ${CURRENT_YEAR}.`)
+      return
+    }
+
     setPatientStatus('Saving profile...')
+    setPatientSaving(true)
 
     const { error } = await supabase
       .schema('clinical')
@@ -218,64 +244,106 @@ function App() {
 
     if (error) {
       setPatientStatus(`Save failed: ${error.message}`)
+      setPatientSaving(false)
       return
     }
 
     setPatientStatus('Patient profile saved.')
+    setPatientSaving(false)
   }
 
   async function handleRunMohapIngest() {
-    if (!supabase) return
-    setMohapStatus('Running MOHAP ingestion...')
+    if (!supabase || !session) {
+      setMohapStatus('Please sign in first.')
+      return
+    }
 
-    const { data, error } = await supabase.functions.invoke('mohap-ingest', {
-      method: 'POST',
-    })
+    setMohapStatus('Running MOHAP ingestion...')
+    setMohapLoading(true)
+    const { data, error } = await supabase.functions.invoke('mohap-ingest', { method: 'POST' })
 
     if (error) {
-      setMohapStatus(`Ingest failed: ${error.message}`)
+      const humanMessage = error.message.includes('Failed to send a request')
+        ? 'Ingest failed: function unreachable or unauthorized. Verify deployment and auth.'
+        : `Ingest failed: ${error.message}`
+      setMohapStatus(humanMessage)
+      setMohapLoading(false)
       return
     }
 
     const snapshotId = data?.snapshotId ? ` Snapshot: ${data.snapshotId}` : ''
     setMohapStatus(`Ingest completed.${snapshotId}`)
+    setMohapLoading(false)
+    await loadResearchSnapshots()
   }
+
+  const canSaveProfile = Boolean(
+    session &&
+      profileForm.display_name.trim() &&
+      profileForm.birth_year.trim() &&
+      profileForm.sex &&
+      profileForm.diabetes_type &&
+      !patientSaving,
+  )
 
   return (
     <main className="app-shell">
-      <h1>DM Twin</h1>
-      <p className="subtitle">Research + patient + clinician + ingestion control panel.</p>
-
-      <section className="card">
-        <h2>Environment status</h2>
-        <p>{hasSupabaseEnv ? 'Supabase keys detected in env.' : 'Supabase keys missing in env.'}</p>
-        <p className="status">{status}</p>
+      <a className="skip-link" href="#content">
+        Skip to content
+      </a>
+      <header className="topbar">
+        <h1>DM Twin</h1>
         {session?.user ? (
-          <div className="row">
+          <div className="row compact">
             <p className="meta">Signed in as: {session.user.email}</p>
             <button type="button" onClick={handleSignOut}>
               Sign out
             </button>
           </div>
-        ) : (
-          <form className="row" onSubmit={handleSignIn}>
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
-              required
-            />
-            <button type="submit">Send magic link</button>
-          </form>
-        )}
+        ) : null}
+      </header>
+      <p className="subtitle">Research + patient + clinician + ingestion control panel.</p>
+
+      <section className="card" id="content">
+        <h2>Environment status</h2>
+        <p>{hasSupabaseEnv ? 'Supabase keys detected in env.' : 'Supabase keys missing in env.'}</p>
+        <p className="status">{connectionStatus}</p>
+
+        {!session ? (
+          <>
+            <form className="row" onSubmit={handleSignIn}>
+              <div className="field">
+                <label htmlFor="email">Email address</label>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => {
+                    setEmail(event.target.value)
+                    setAuthStatus('')
+                  }}
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  required
+                />
+              </div>
+              <button type="submit" disabled={authLoading}>
+                {authLoading ? 'Sending...' : 'Send magic link'}
+              </button>
+            </form>
+            {authStatus ? <p className="status">{authStatus}</p> : null}
+          </>
+        ) : null}
       </section>
 
       <section className="card">
-        <h2>Research Dashboard</h2>
+        <h2>
+          Research Dashboard <span className={`badge ${snapshots.length > 0 ? 'ok' : 'warn'}`}></span>
+        </h2>
+        {!session ? <p className="status">Sign in to access research datasets.</p> : null}
         <div className="row">
           <p className="status">{researchStatus}</p>
-          <button type="button" onClick={() => void loadResearchSnapshots()} disabled={researchLoading}>
+          <button type="button" onClick={() => void loadResearchSnapshots()} disabled={researchLoading || !session}>
             {researchLoading ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
@@ -293,53 +361,89 @@ function App() {
 
       <section className="grid">
         <section className="card">
-          <h2>Patient Onboarding</h2>
+          <h2>
+            Patient Onboarding <span className={`badge ${session ? 'ok' : 'warn'}`}></span>
+          </h2>
           <p className="status">{patientStatus}</p>
           <form className="stack" onSubmit={handlePatientSave}>
-            <input
-              placeholder="Display name"
-              aria-label="Display name"
-              value={profileForm.display_name}
-              onChange={(event) =>
-                setProfileForm((prev) => ({ ...prev, display_name: event.target.value }))
-              }
-            />
-            <input
-              placeholder="Birth year"
-              aria-label="Birth year"
-              value={profileForm.birth_year}
-              onChange={(event) =>
-                setProfileForm((prev) => ({ ...prev, birth_year: event.target.value }))
-              }
-            />
-            <input
-              placeholder="Sex"
-              aria-label="Sex"
-              value={profileForm.sex}
-              onChange={(event) => setProfileForm((prev) => ({ ...prev, sex: event.target.value }))}
-            />
-            <input
-              placeholder="Diabetes type"
-              aria-label="Diabetes type"
-              value={profileForm.diabetes_type}
-              onChange={(event) =>
-                setProfileForm((prev) => ({ ...prev, diabetes_type: event.target.value }))
-              }
-            />
-            <input
-              type="date"
-              aria-label="Diagnosis date"
-              value={profileForm.diagnosis_date}
-              onChange={(event) =>
-                setProfileForm((prev) => ({ ...prev, diagnosis_date: event.target.value }))
-              }
-            />
-            <button type="submit">Save patient profile</button>
+            <div className="field">
+              <label htmlFor="display-name">Display name</label>
+              <input
+                id="display-name"
+                value={profileForm.display_name}
+                onChange={(event) =>
+                  setProfileForm((prev) => ({ ...prev, display_name: event.target.value }))
+                }
+                autoComplete="name"
+                required
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="birth-year">Birth year</label>
+              <input
+                id="birth-year"
+                type="number"
+                min={1900}
+                max={CURRENT_YEAR}
+                value={profileForm.birth_year}
+                onChange={(event) => setProfileForm((prev) => ({ ...prev, birth_year: event.target.value }))}
+                inputMode="numeric"
+                required
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="sex">Sex</label>
+              <select
+                id="sex"
+                value={profileForm.sex}
+                onChange={(event) => setProfileForm((prev) => ({ ...prev, sex: event.target.value }))}
+                required
+              >
+                <option value="">Select</option>
+                <option value="female">Female</option>
+                <option value="male">Male</option>
+                <option value="other">Other</option>
+                <option value="prefer_not_to_say">Prefer not to say</option>
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="diabetes-type">Diabetes type</label>
+              <select
+                id="diabetes-type"
+                value={profileForm.diabetes_type}
+                onChange={(event) =>
+                  setProfileForm((prev) => ({ ...prev, diabetes_type: event.target.value }))
+                }
+                required
+              >
+                <option value="">Select</option>
+                <option value="type_1">Type 1</option>
+                <option value="type_2">Type 2</option>
+                <option value="gestational">Gestational</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="diagnosis-date">Diagnosis date</label>
+              <input
+                id="diagnosis-date"
+                type="date"
+                value={profileForm.diagnosis_date}
+                onChange={(event) =>
+                  setProfileForm((prev) => ({ ...prev, diagnosis_date: event.target.value }))
+                }
+              />
+            </div>
+            <button type="submit" disabled={!canSaveProfile}>
+              {patientSaving ? 'Saving...' : 'Save patient profile'}
+            </button>
           </form>
         </section>
 
         <section className="card">
-          <h2>Clinician Patient List</h2>
+          <h2>
+            Clinician Patient List <span className={`badge ${careTeamRows.length > 0 ? 'ok' : 'warn'}`}></span>
+          </h2>
           <p className="status">{clinicianStatus}</p>
           {careTeamRows.length > 0 ? (
             <ul className="list">
@@ -354,12 +458,19 @@ function App() {
       </section>
 
       <section className="card">
-        <h2>MOHAP Ingestion</h2>
+        <h2>
+          MOHAP Ingestion <span className={`badge ${mohapStatus.startsWith('Ingest completed') ? 'ok' : 'warn'}`}></span>
+        </h2>
+        {!session ? <p className="status">Sign in to run ingestion jobs.</p> : null}
         <p className="status">{mohapStatus}</p>
-        <button type="button" onClick={handleRunMohapIngest}>
-          Run MOHAP ingest now
+        <button type="button" onClick={handleRunMohapIngest} disabled={mohapLoading || !session}>
+          {mohapLoading ? 'Running...' : 'Run MOHAP ingest now'}
         </button>
       </section>
+
+      <footer className="footer">
+        <p>Research use only. Do not use as clinical decision support without formal validation and approvals.</p>
+      </footer>
     </main>
   )
 }
