@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import type { CareTeamRow } from '../types'
+import { DEMO_MODE } from '../lib/config'
 
 export function ClinicPage() {
   const { session } = useAuth()
@@ -10,6 +11,16 @@ export function ClinicPage() {
 
   useEffect(() => {
     async function loadRows() {
+      if (DEMO_MODE && !session?.user?.id) {
+        setRows([
+          { patient_id: 'PATIENT-001', relationship: 'primary' },
+          { patient_id: 'PATIENT-002', relationship: 'follow_up' },
+          { patient_id: 'PATIENT-003', relationship: 'high_risk' },
+        ])
+        setStatus('Demo data loaded (auth bypass).')
+        return
+      }
+
       if (!supabase || !session?.user?.id) return
 
       const { data, error } = await supabase

@@ -2,6 +2,7 @@ import { Navigate } from 'react-router-dom'
 import type { PropsWithChildren } from 'react'
 import { useAuth } from '../context/AuthContext'
 import type { AppRole } from '../types'
+import { DEMO_MODE } from '../lib/config'
 
 const DEFAULT_ROUTE_BY_ROLE: Record<AppRole, string> = {
   researcher: '/research',
@@ -12,6 +13,10 @@ const DEFAULT_ROUTE_BY_ROLE: Record<AppRole, string> = {
 
 export function ProtectedRoute({ roles, children }: PropsWithChildren<{ roles: AppRole[] }>) {
   const { session, role, loading } = useAuth()
+
+  if (DEMO_MODE) {
+    return <>{children}</>
+  }
 
   if (loading) {
     return <div className="card">Loading...</div>

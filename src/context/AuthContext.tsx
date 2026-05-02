@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import type { PropsWithChildren } from 'react'
 import type { AppRole, AuthState } from '../types'
 import { supabase } from '../lib/supabase'
+import { DEMO_MODE } from '../lib/config'
 
 type AuthContextValue = AuthState & {
   signInWithMagicLink: (email: string) => Promise<void>
@@ -23,8 +24,8 @@ function normalizeRole(value: unknown): AppRole {
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<AuthState['session']>(null)
-  const [role, setRole] = useState<AppRole>(DEFAULT_ROLE)
-  const [loading, setLoading] = useState(true)
+  const [role, setRole] = useState<AppRole>(DEMO_MODE ? 'admin' : DEFAULT_ROLE)
+  const [loading, setLoading] = useState(!DEMO_MODE)
   const [connectionStatus, setConnectionStatus] = useState('Checking connection...')
   const [authStatus, setAuthStatus] = useState('')
   const [otpCooldownSeconds, setOtpCooldownSeconds] = useState(0)
@@ -40,6 +41,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [otpCooldownSeconds])
 
   useEffect(() => {
+    if (DEMO_MODE) {
+      setConnectionStatus('Demo mode enabled. Authentication is bypassed.')
+      setLoading(false)
+      return
+    }
+
     async function bootstrap() {
       if (!supabase) {
         setConnectionStatus('Supabase env vars are not configured yet.')
@@ -63,6 +70,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [])
 
   useEffect(() => {
+    if (DEMO_MODE) return
     if (!supabase) return
 
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
@@ -73,6 +81,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [])
 
   useEffect(() => {
+    if (DEMO_MODE) {
+      setRole('admin')
+      return
+    }
+
     async function fetchRole() {
       if (!supabase || !session?.user?.id) {
         setRole(DEFAULT_ROLE)
@@ -92,6 +105,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [session?.user?.id])
 
   async function signInWithMagicLink(email: string) {
+    if (DEMO_MODE) {
+      setAuthStatus('Demo mode is enabled. Sign-in is not required.')
+      return
+    }
     if (!supabase) return
     if (otpCooldownSeconds > 0) {
       setAuthStatus(`Please wait ${otpCooldownSeconds}s before requesting another magic link.`)
@@ -119,6 +136,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }
 
   async function signOut() {
+    if (DEMO_MODE) {
+      setAuthStatus('Demo mode is enabled.')
+      return
+    }
     if (!supabase) return
     const { error } = await supabase.auth.signOut()
     if (error) {

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { DEMO_MODE } from '../lib/config'
 
 export function AuthPage() {
   const {
@@ -16,6 +17,10 @@ export function AuthPage() {
   const [loading, setLoading] = useState(false)
 
   if (session) {
+    return <Navigate to="/" replace />
+  }
+
+  if (DEMO_MODE) {
     return <Navigate to="/" replace />
   }
 

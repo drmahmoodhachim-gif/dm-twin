@@ -2,6 +2,7 @@ import { Link, NavLink } from 'react-router-dom'
 import type { PropsWithChildren } from 'react'
 import { useAuth } from '../context/AuthContext'
 import type { AppRole } from '../types'
+import { DEMO_MODE } from '../lib/config'
 
 const NAV_ITEMS: Array<{ to: string; label: string; roles: AppRole[] }> = [
   { to: '/research', label: 'Research', roles: ['researcher', 'admin'] },
@@ -11,7 +12,7 @@ const NAV_ITEMS: Array<{ to: string; label: string; roles: AppRole[] }> = [
 
 export function AppLayout({ children }: PropsWithChildren) {
   const { session, role, signOut } = useAuth()
-  const visibleItems = NAV_ITEMS.filter((item) => item.roles.includes(role))
+  const visibleItems = DEMO_MODE ? NAV_ITEMS : NAV_ITEMS.filter((item) => item.roles.includes(role))
 
   return (
     <div className="shell">
@@ -33,7 +34,7 @@ export function AppLayout({ children }: PropsWithChildren) {
               </button>
             </>
           ) : (
-            <span className="chip">guest</span>
+            <span className="chip">{DEMO_MODE ? 'demo mode' : 'guest'}</span>
           )}
         </div>
       </header>

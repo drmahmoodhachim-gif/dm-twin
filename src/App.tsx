@@ -9,11 +9,13 @@ import { MePage } from './pages/MePage'
 import { PrivacyPage } from './pages/PrivacyPage'
 import { ResearchPage } from './pages/ResearchPage'
 import { TermsPage } from './pages/TermsPage'
+import { DEMO_MODE } from './lib/config'
 import './App.css'
 
 function DefaultRedirect() {
   const { role, session, loading } = useAuth()
   if (loading) return <main className="auth-page">Loading...</main>
+  if (DEMO_MODE) return <Navigate to="/research" replace />
   if (!session) return <Navigate to="/auth" replace />
 
   if (role === 'researcher' || role === 'admin') return <Navigate to="/research" replace />

@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import type { PatientProfileForm } from '../types'
+import { DEMO_MODE } from '../lib/config'
 
 const CURRENT_YEAR = new Date().getFullYear()
 
@@ -20,6 +21,18 @@ export function MePage() {
 
   useEffect(() => {
     async function loadProfile() {
+      if (DEMO_MODE && !session?.user?.id) {
+        setForm({
+          display_name: 'Demo Patient',
+          birth_year: '1986',
+          sex: 'female',
+          diabetes_type: 'type_2',
+          diagnosis_date: '2019-06-01',
+        })
+        setStatus('Demo profile loaded (auth bypass).')
+        return
+      }
+
       if (!supabase || !session?.user?.id) return
 
       const { data, error } = await supabase
@@ -60,6 +73,10 @@ export function MePage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (DEMO_MODE && !session?.user?.id) {
+      setStatus('Demo mode: profile changes are local preview only.')
+      return
+    }
     if (!supabase || !session?.user?.id) return
     const birthYear = Number(form.birth_year)
     if (!birthYear || birthYear < 1900 || birthYear > CURRENT_YEAR) {

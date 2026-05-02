@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Snapshot } from '../types'
+import { DEMO_MODE } from '../lib/config'
 
 export function ResearchPage() {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([])
@@ -29,6 +30,10 @@ export function ResearchPage() {
   }
 
   async function runIngest() {
+    if (DEMO_MODE) {
+      setIngestStatus('Demo mode: ingestion trigger is disabled.')
+      return
+    }
     if (!supabase) return
     setIngestStatus('Running MOHAP ingestion...')
     const { data, error } = await supabase.functions.invoke('mohap-ingest', { method: 'POST' })
