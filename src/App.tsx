@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from './components/AppLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { AuthCallbackPage } from './pages/AuthCallbackPage'
 import { AuthPage } from './pages/AuthPage'
 import { ClinicPage } from './pages/ClinicPage'
 import { MePage } from './pages/MePage'
@@ -11,7 +12,8 @@ import { TermsPage } from './pages/TermsPage'
 import './App.css'
 
 function DefaultRedirect() {
-  const { role, session } = useAuth()
+  const { role, session, loading } = useAuth()
+  if (loading) return <main className="auth-page">Loading...</main>
   if (!session) return <Navigate to="/auth" replace />
 
   if (role === 'researcher' || role === 'admin') return <Navigate to="/research" replace />
@@ -23,6 +25,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/auth" element={<AuthPage />} />
+      <Route path="/auth/callback" element={<AuthCallbackPage />} />
       <Route
         path="/research"
         element={

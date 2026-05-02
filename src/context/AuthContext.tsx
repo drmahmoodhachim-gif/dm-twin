@@ -82,7 +82,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   async function signInWithMagicLink(email: string) {
     if (!supabase) return
     setAuthStatus('Sending magic link...')
-    const emailRedirectTo = typeof window !== 'undefined' ? `${window.location.origin}/` : undefined
+    const emailRedirectTo =
+      typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo },
