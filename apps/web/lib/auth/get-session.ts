@@ -7,6 +7,18 @@ export type UserProfile = {
 }
 
 export async function getSessionWithProfile() {
+  const demoBypassAuth = process.env.DEMO_BYPASS_AUTH === 'true'
+  if (demoBypassAuth) {
+    return {
+      user: { id: 'demo-user' } as any,
+      profile: {
+        id: 'demo-user',
+        role: 'researcher',
+        full_name: 'Demo User',
+      } as UserProfile,
+    }
+  }
+
   const supabase = await createClient()
   const {
     data: { user },

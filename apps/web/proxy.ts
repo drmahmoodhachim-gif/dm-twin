@@ -9,6 +9,18 @@ const ROLE_HOME: Record<string, string> = {
 }
 
 export async function proxy(request: NextRequest) {
+  const demoBypassAuth = process.env.DEMO_BYPASS_AUTH === 'true'
+  const pathname = request.nextUrl.pathname
+
+  if (demoBypassAuth) {
+    if (pathname === '/' || pathname === '/login') {
+      const redirectUrl = request.nextUrl.clone()
+      redirectUrl.pathname = '/research'
+      return NextResponse.redirect(redirectUrl)
+    }
+    return NextResponse.next({ request })
+  }
+
   let response = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -32,7 +44,6 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const pathname = request.nextUrl.pathname
   const publicPath = pathname.startsWith('/login') || pathname.startsWith('/api/auth/callback')
 
   if (!user && !publicPath) {
