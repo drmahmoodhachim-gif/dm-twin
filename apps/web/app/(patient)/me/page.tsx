@@ -538,6 +538,12 @@ export default function MePage() {
         </p>
         <div className="mt-4">
           <Link
+            href="/me/start"
+            className="mr-2 inline-flex rounded-full border border-indigo-300/50 bg-indigo-400/15 px-3 py-1.5 text-sm text-indigo-100 hover:bg-indigo-400/25"
+          >
+            Open onboarding flow
+          </Link>
+          <Link
             href="/me/entry"
             className="inline-flex rounded-full border border-cyan-300/50 bg-cyan-400/15 px-3 py-1.5 text-sm text-cyan-100 hover:bg-cyan-400/25"
           >
@@ -824,10 +830,10 @@ export default function MePage() {
               className={`rounded border p-3 ${
                 sop.active
                   ? sop.priority === 'high'
-                    ? 'border-rose-200 bg-rose-50'
+                    ? 'border-rose-400/40 bg-rose-500/10'
                     : sop.priority === 'medium'
-                      ? 'border-amber-200 bg-amber-50'
-                      : 'border-emerald-200 bg-emerald-50'
+                      ? 'border-amber-400/40 bg-amber-500/10'
+                      : 'border-emerald-400/40 bg-emerald-500/10'
                   : 'border-zinc-700 bg-zinc-900/70'
               }`}
             >
