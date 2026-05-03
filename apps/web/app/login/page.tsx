@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
@@ -8,6 +8,14 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<string>('')
   const [loading, setLoading] = useState(false)
+  const demoBypassAuth =
+    process.env.NEXT_PUBLIC_DEMO_BYPASS_AUTH === 'true' || process.env.DEMO_BYPASS_AUTH === 'true'
+
+  useEffect(() => {
+    if (demoBypassAuth) {
+      window.location.replace('/research')
+    }
+  }, [demoBypassAuth])
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
