@@ -41,6 +41,8 @@ export async function POST(request: Request) {
       `Daily context: ${context}`,
     ].join('\n')
 
+    const anthropicModel = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514'
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -49,7 +51,7 @@ export async function POST(request: Request) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-latest',
+        model: anthropicModel,
         max_tokens: 220,
         messages: [{ role: 'user', content: prompt }],
       }),
