@@ -9,7 +9,8 @@ const ROLE_HOME: Record<string, string> = {
 }
 
 export async function proxy(request: NextRequest) {
-  const demoBypassAuth = process.env.DEMO_BYPASS_AUTH === 'true'
+  const demoBypassAuth =
+    process.env.DEMO_BYPASS_AUTH === 'true' || process.env.NEXT_PUBLIC_DEMO_BYPASS_AUTH === 'true'
   const pathname = request.nextUrl.pathname
 
   if (demoBypassAuth) {

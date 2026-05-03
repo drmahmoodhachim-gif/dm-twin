@@ -7,7 +7,8 @@ export type UserProfile = {
 }
 
 export async function getSessionWithProfile() {
-  const demoBypassAuth = process.env.DEMO_BYPASS_AUTH === 'true'
+  const demoBypassAuth =
+    process.env.DEMO_BYPASS_AUTH === 'true' || process.env.NEXT_PUBLIC_DEMO_BYPASS_AUTH === 'true'
   if (demoBypassAuth) {
     return {
       user: { id: 'demo-user' } as any,
