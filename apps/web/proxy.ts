@@ -16,7 +16,7 @@ export async function proxy(request: NextRequest) {
   if (demoBypassAuth) {
     if (pathname === '/' || pathname === '/login') {
       const redirectUrl = request.nextUrl.clone()
-      redirectUrl.pathname = '/research'
+      redirectUrl.pathname = '/me'
       return NextResponse.redirect(redirectUrl)
     }
     return NextResponse.next({ request })

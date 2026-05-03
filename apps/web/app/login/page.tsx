@@ -13,7 +13,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (demoBypassAuth) {
-      window.location.replace('/research')
+      window.location.replace('/me')
     }
   }, [demoBypassAuth])
 

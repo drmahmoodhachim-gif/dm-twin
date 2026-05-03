@@ -14,8 +14,8 @@ export async function getSessionWithProfile() {
       user: { id: 'demo-user' } as any,
       profile: {
         id: 'demo-user',
-        role: 'researcher',
-        full_name: 'Demo User',
+        role: 'patient',
+        full_name: 'Demo Patient',
       } as UserProfile,
     }
   }
