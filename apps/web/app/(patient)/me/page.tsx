@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import Link from 'next/link'
+import { useEffect, useMemo, useState } from 'react'
 
 type DailyInput = {
   symptomBurden: number
@@ -21,6 +22,17 @@ type LabMetric = {
   previous: number
   unit: string
   target: string
+}
+
+type ManualEntry = {
+  id: string
+  patientId: string
+  timestamp: string
+  note: string
+  clinicianConcern: string
+  homeObservation: string
+  customMetricName: string
+  customMetricValue: string
 }
 
 type PatientScenario = {
@@ -182,6 +194,42 @@ const PATIENT_SCENARIOS: PatientScenario[] = [
   },
 ]
 
+const ENTRIES_STORAGE_KEY = 'dm-twin-manual-entries'
+const SIGNAL_STREAMS = [
+  {
+    title: 'Glycemic signals',
+    detail:
+      'CGM/fingerstick/ketones. Watch CV above 36%, TIR drop greater than 10 points, and fasting trends over 7 days.',
+  },
+  {
+    title: 'Behavioral signals',
+    detail:
+      'Meals, adherence, insulin timing, activity, sleep, alcohol, smoking. Engagement drop often predicts deterioration before glucose worsens.',
+  },
+  {
+    title: 'Physiological signals',
+    detail:
+      'Weight, BP, RHR, HRV, temperature, foot photo, symptom checklist. Detect early infection and fluid overload patterns.',
+  },
+  {
+    title: 'Subjective signals',
+    detail:
+      'Energy, mood, stress, distress screeners, and free-text/voice notes. Often the first warning before measurable decompensation.',
+  },
+]
+
+const MODEL_LAYERS = [
+  'Layer 1: Per-signal anomaly detection against each patient baseline (14-30 days).',
+  'Layer 2: Multi-signal pattern recognition for infection, burnout, kidney risk, nocturnal hypo, and Ramadan risk.',
+  'Layer 3: Transparent clinical safety rules as non-negotiable guardrails.',
+]
+
+const ALERT_TIERS = [
+  'Self-care nudge: Patient only, non-interruptive.',
+  'Care-team review: Clinician inbox within 24h.',
+  'Urgent contact: Real-time clinician ping plus patient prompt.',
+]
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
@@ -221,9 +269,9 @@ function classifyTrend(current: number, previous: number) {
 }
 
 function riskBand(score: number) {
-  if (score >= 70) return { label: 'High', color: 'text-rose-700', ring: '#ef4444' }
-  if (score >= 40) return { label: 'Moderate', color: 'text-amber-700', ring: '#f59e0b' }
-  return { label: 'Low', color: 'text-emerald-700', ring: '#10b981' }
+  if (score >= 70) return { label: 'High', color: 'text-rose-300', ring: '#fb7185' }
+  if (score >= 40) return { label: 'Moderate', color: 'text-amber-300', ring: '#fbbf24' }
+  return { label: 'Low', color: 'text-emerald-300', ring: '#34d399' }
 }
 
 function TrendSparkline({ values }: { values: number[] }) {
@@ -241,12 +289,12 @@ function TrendSparkline({ values }: { values: number[] }) {
     .join(' ')
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="h-16 w-full rounded bg-zinc-50">
-      <polyline points={points} fill="none" stroke="currentColor" strokeWidth="3" className="text-zinc-800" />
+    <svg viewBox={`0 0 ${w} ${h}`} className="h-16 w-full rounded bg-zinc-900/60">
+      <polyline points={points} fill="none" stroke="currentColor" strokeWidth="3" className="text-cyan-300" />
       {values.map((v, i) => {
         const x = (i / (values.length - 1 || 1)) * (w - 10) + 5
         const y = h - ((v - min) / span) * (h - 12) - 6
-        return <circle key={`${v}-${i}`} cx={x} cy={y} r="3.5" className="fill-white stroke-zinc-800" />
+        return <circle key={`${v}-${i}`} cx={x} cy={y} r="3.5" className="fill-zinc-950 stroke-cyan-300" />
       })}
     </svg>
   )
@@ -325,6 +373,42 @@ export default function MePage() {
   const [inputByPatient, setInputByPatient] = useState<Record<string, DailyInput>>(
     Object.fromEntries(PATIENT_SCENARIOS.map((p) => [p.id, p.input])),
   )
+  const [entryFeed, setEntryFeed] = useState<ManualEntry[]>([])
+
+  useEffect(() => {
+    function loadEntries() {
+      if (typeof window === 'undefined') return
+      const raw = window.localStorage.getItem(ENTRIES_STORAGE_KEY)
+      if (!raw) {
+        setEntryFeed([])
+        return
+      }
+      try {
+        setEntryFeed(JSON.parse(raw) as ManualEntry[])
+      } catch {
+        setEntryFeed([])
+      }
+    }
+
+    function handleStorage(e: StorageEvent) {
+      if (e.key === ENTRIES_STORAGE_KEY) {
+        loadEntries()
+      }
+    }
+
+    function handleSameTabUpdate() {
+      loadEntries()
+    }
+
+    loadEntries()
+    window.addEventListener('storage', handleStorage)
+    window.addEventListener('dm-twin-entries-updated', handleSameTabUpdate)
+
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      window.removeEventListener('dm-twin-entries-updated', handleSameTabUpdate)
+    }
+  }, [])
 
   const selectedPatient = useMemo(
     () => PATIENT_SCENARIOS.find((p) => p.id === selectedPatientId) ?? PATIENT_SCENARIOS[0],
@@ -411,12 +495,24 @@ export default function MePage() {
       }
     })
   }, [inputByPatient])
+  const selectedPatientEntries = useMemo(
+    () =>
+      entryFeed
+        .filter((entry) => entry.patientId === selectedPatient.id)
+        .sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1)),
+    [entryFeed, selectedPatient.id],
+  )
 
   return (
-    <section className="space-y-4">
-      <div className="rounded-xl border border-black/10 bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold">Patient twin clinical dashboard</h1>
-        <p className="mt-2 text-sm text-zinc-700">
+    <section className="space-y-4 rounded-3xl bg-[radial-gradient(circle_at_top_left,_rgba(6,182,212,0.16),_transparent_35%),radial-gradient(circle_at_top_right,_rgba(99,102,241,0.16),_transparent_40%),linear-gradient(to_bottom,_#020617,_#111827)] p-4 text-zinc-100 md:p-6">
+      <div className="rounded-2xl border border-cyan-400/20 bg-zinc-950/65 p-6 shadow-[0_0_40px_rgba(6,182,212,0.12)] backdrop-blur">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight text-cyan-100">Patient twin command center</h1>
+          <span className="rounded-full border border-cyan-300/40 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-200">
+            Futuristic clinical twin mode
+          </span>
+        </div>
+        <p className="mt-2 text-sm text-zinc-300">
           Five scenario records with selectable daily inputs, hidden at-home warnings, and SOP activation
           according to each case.
         </p>
@@ -426,28 +522,103 @@ export default function MePage() {
               key={patient.id}
               type="button"
               onClick={() => setSelectedPatientId(patient.id)}
-              className={`rounded border px-3 py-1 text-sm ${
+              className={`rounded-full border px-3 py-1 text-sm transition ${
                 selectedPatient.id === patient.id
-                  ? 'border-black bg-black text-white'
-                  : 'border-black/20 bg-white text-zinc-800'
+                  ? 'border-cyan-300 bg-cyan-300/20 text-cyan-100'
+                  : 'border-zinc-700 bg-zinc-900/70 text-zinc-300 hover:border-cyan-400/40'
               }`}
             >
               {patient.id} - {patient.name}
             </button>
           ))}
         </div>
-        <p className="mt-3 text-xs text-zinc-600">
+        <p className="mt-3 text-xs text-zinc-400">
           Selected case: {selectedPatient.name}, {selectedPatient.age}, {selectedPatient.condition} ({' '}
           {selectedPatient.location} )
         </p>
+        <div className="mt-4">
+          <Link
+            href="/me/entry"
+            className="inline-flex rounded-full border border-cyan-300/50 bg-cyan-400/15 px-3 py-1.5 text-sm text-cyan-100 hover:bg-cyan-400/25"
+          >
+            Open blank entry page
+          </Link>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-indigo-400/25 bg-zinc-950/70 p-5 shadow-[0_0_30px_rgba(99,102,241,0.12)]">
+        <h2 className="text-lg font-semibold text-indigo-100">Live entry feed (from blank entry page)</h2>
+        <p className="mt-1 text-sm text-zinc-300">
+          Entries added in the blank entry page are shown here simultaneously for dashboard awareness.
+        </p>
+        <div className="mt-3 space-y-2 text-sm">
+          {selectedPatientEntries.length === 0 ? (
+            <div className="rounded border border-dashed border-zinc-700 p-3 text-zinc-400">
+              No manual entries yet for this patient.
+            </div>
+          ) : (
+            selectedPatientEntries.slice(0, 5).map((entry) => (
+              <div key={entry.id} className="rounded border border-zinc-700/80 bg-zinc-900/80 p-3">
+                <p className="text-xs text-zinc-400">{new Date(entry.timestamp).toLocaleString()}</p>
+                <p className="mt-1">
+                  <span className="font-medium">Note:</span> {entry.note || '-'}
+                </p>
+                <p>
+                  <span className="font-medium">Concern:</span> {entry.clinicianConcern || '-'}
+                </p>
+                <p>
+                  <span className="font-medium">Home observation:</span> {entry.homeObservation || '-'}
+                </p>
+                <p>
+                  <span className="font-medium">Custom metric:</span>{' '}
+                  {entry.customMetricName ? `${entry.customMetricName}: ${entry.customMetricValue || '-'}` : '-'}
+                </p>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-cyan-400/20 bg-zinc-950/65 p-5 shadow-[0_0_30px_rgba(6,182,212,0.1)]">
+        <h2 className="text-lg font-semibold text-cyan-100">Clinical intelligence blueprint</h2>
+        <p className="mt-2 text-sm text-zinc-300">
+          Excellent clinical question: daily patient inputs are what make a twin different from a CGM viewer.
+          The twin fuses four signal streams to detect deterioration 5 to 14 days earlier than routine care.
+        </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {SIGNAL_STREAMS.map((stream) => (
+            <div key={stream.title} className="rounded-xl border border-zinc-700 bg-zinc-900/70 p-3">
+              <p className="text-sm font-semibold text-cyan-200">{stream.title}</p>
+              <p className="mt-1 text-xs text-zinc-300">{stream.detail}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <div className="rounded-xl border border-zinc-700 bg-zinc-900/70 p-3">
+            <p className="text-sm font-semibold text-indigo-200">AI decision stack</p>
+            <ul className="mt-2 space-y-1 text-xs text-zinc-300">
+              {MODEL_LAYERS.map((layer) => (
+                <li key={layer}>- {layer}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-xl border border-zinc-700 bg-zinc-900/70 p-3">
+            <p className="text-sm font-semibold text-indigo-200">Three-tier alerting only</p>
+            <ul className="mt-2 space-y-1 text-xs text-zinc-300">
+              {ALERT_TIERS.map((tier) => (
+                <li key={tier}>- {tier}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-xl border border-black/10 bg-white p-4 shadow-sm">
-          <p className="text-xs uppercase tracking-wide text-zinc-500">Current risk score</p>
+        <div className="rounded-2xl border border-zinc-700 bg-zinc-950/75 p-4 shadow-sm">
+          <p className="text-xs uppercase tracking-wide text-zinc-400">Current risk score</p>
           <div className="mt-3 flex items-center gap-4">
             <svg viewBox="0 0 80 80" className="h-20 w-20 -rotate-90">
-              <circle cx="40" cy="40" r="30" stroke="#e4e4e7" strokeWidth="10" fill="none" />
+              <circle cx="40" cy="40" r="30" stroke="#334155" strokeWidth="10" fill="none" />
               <circle
                 cx="40"
                 cy="40"
@@ -463,30 +634,30 @@ export default function MePage() {
                 x="40"
                 y="45"
                 textAnchor="middle"
-                className="rotate-90 origin-center fill-zinc-900 text-[14px] font-bold"
+                className="rotate-90 origin-center fill-cyan-100 text-[14px] font-bold"
               >
                 {currentRisk}
               </text>
             </svg>
             <div>
               <p className={`text-sm font-semibold ${risk.color}`}>{risk.label} risk band</p>
-              <p className="text-sm text-zinc-600">Previous: {priorRisk}/100</p>
+              <p className="text-sm text-zinc-400">Previous: {priorRisk}/100</p>
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-black/10 bg-white p-4 shadow-sm">
-          <p className="text-xs uppercase tracking-wide text-zinc-500">Trend classification</p>
+        <div className="rounded-2xl border border-zinc-700 bg-zinc-950/75 p-4 shadow-sm">
+          <p className="text-xs uppercase tracking-wide text-zinc-400">Trend classification</p>
           <p className="mt-1 text-2xl font-semibold capitalize">{trend}</p>
-          <p className="mt-1 text-sm text-zinc-600">Delta vs prior day: {currentRisk - priorRisk}</p>
+          <p className="mt-1 text-sm text-zinc-400">Delta vs prior day: {currentRisk - priorRisk}</p>
           <div className="mt-3">
             <TrendSparkline values={riskSeries} />
           </div>
         </div>
-        <div className="rounded-xl border border-black/10 bg-white p-4 shadow-sm">
-          <p className="text-xs uppercase tracking-wide text-zinc-500">Active notifications</p>
+        <div className="rounded-2xl border border-zinc-700 bg-zinc-950/75 p-4 shadow-sm">
+          <p className="text-xs uppercase tracking-wide text-zinc-400">Active notifications</p>
           <p className="mt-1 text-3xl font-semibold">{notifications.length}</p>
-          <p className="mt-1 text-sm text-zinc-600">Escalation-ready care team queue</p>
-          <div className="mt-3 space-y-1 text-xs text-zinc-600">
+          <p className="mt-1 text-sm text-zinc-400">Escalation-ready care team queue</p>
+          <div className="mt-3 space-y-1 text-xs text-zinc-400">
             <div className="flex items-center justify-between">
               <span>High</span>
               <span>{notifications.filter((n) => n.severity === 'high').length}</span>
@@ -504,9 +675,9 @@ export default function MePage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-zinc-700 bg-zinc-950/75 p-5 shadow-sm">
           <h2 className="text-lg font-semibold">Daily patient inputs</h2>
-          <p className="mb-4 mt-1 text-sm text-zinc-600">
+          <p className="mb-4 mt-1 text-sm text-zinc-400">
             Enter today&apos;s measures to update predictions in real time.
           </p>
           <div className="grid grid-cols-2 gap-3 text-sm">
@@ -523,9 +694,9 @@ export default function MePage() {
               ['fastingGlucose', 'Fasting glucose (mg/dL)', 60, 300, 1],
             ].map(([key, label, min, max, step]) => (
               <label key={key} className="grid gap-1">
-                <span className="text-xs text-zinc-600">{label}</span>
+                <span className="text-xs text-zinc-400">{label}</span>
                 <input
-                  className="rounded border border-black/20 px-2 py-1"
+                  className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-100"
                   type="number"
                   min={Number(min)}
                   max={Number(max)}
@@ -547,7 +718,7 @@ export default function MePage() {
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
+          <div className="rounded-2xl border border-zinc-700 bg-zinc-950/75 p-5 shadow-sm">
             <h2 className="text-lg font-semibold">Lab evidence panel</h2>
             <div className="mt-3 space-y-2 text-sm">
               {labs.map((lab) => {
@@ -556,14 +727,14 @@ export default function MePage() {
                   (lab.name === 'CRP' || lab.name === 'LDL-C' || lab.name === 'HbA1c') ? delta < 0 : delta >= 0
               const absoluteDelta = Math.abs(delta)
                 return (
-                  <div key={lab.name} className="rounded border border-black/10 p-3">
+                  <div key={lab.name} className="rounded border border-zinc-700 p-3">
                     <div className="flex items-center justify-between">
                       <p className="font-medium">{lab.name}</p>
                       <p className={`text-xs ${improving ? 'text-emerald-700' : 'text-rose-700'}`}>
                         {improving ? 'Improving' : 'Needs review'}
                       </p>
                     </div>
-                    <p className="text-zinc-700">
+                    <p className="text-zinc-300">
                       Latest: {lab.latest} {lab.unit} | Previous: {lab.previous} {lab.unit} | Target: {lab.target}
                     </p>
                   <div className="mt-2">
@@ -575,9 +746,9 @@ export default function MePage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
+          <div className="rounded-2xl border border-zinc-700 bg-zinc-950/75 p-5 shadow-sm">
             <h2 className="text-lg font-semibold">Doctor feedback</h2>
-            <ul className="mt-2 space-y-2 text-sm text-zinc-700">
+            <ul className="mt-2 space-y-2 text-sm text-zinc-300">
               {selectedPatient.doctorFeedback.map((item) => (
                 <li key={item}>{item}</li>
               ))}
@@ -587,30 +758,30 @@ export default function MePage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-zinc-700 bg-zinc-950/75 p-5 shadow-sm">
           <h2 className="text-lg font-semibold">Activated eMeasures</h2>
           <div className="mt-3 space-y-2 text-sm">
             {eMeasures.map((measure) => (
-              <div key={measure.name} className="rounded border border-black/10 p-3">
+              <div key={measure.name} className="rounded border border-zinc-700 p-3">
                 <div className="flex items-center justify-between">
                   <p className="font-medium">{measure.name}</p>
                   <span
                     className={`rounded px-2 py-0.5 text-xs ${
                       measure.status === 'Activated'
-                        ? 'bg-amber-100 text-amber-900'
-                        : 'bg-emerald-100 text-emerald-900'
+                        ? 'bg-amber-300/20 text-amber-200'
+                        : 'bg-emerald-300/20 text-emerald-200'
                     }`}
                   >
                     {measure.status}
                   </span>
                 </div>
-                <p className="mt-1 text-zinc-700">{measure.rationale}</p>
+                <p className="mt-1 text-zinc-300">{measure.rationale}</p>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-zinc-700 bg-zinc-950/75 p-5 shadow-sm">
           <h2 className="text-lg font-semibold">Care-team notification queue</h2>
           <div className="mt-3 space-y-2 text-sm">
             {notifications.map((item) => (
@@ -629,10 +800,10 @@ export default function MePage() {
                   <span
                     className={`rounded px-2 py-0.5 text-xs ${
                       item.severity === 'high'
-                        ? 'bg-rose-100 text-rose-900'
+                        ? 'bg-rose-300/20 text-rose-200'
                         : item.severity === 'medium'
-                          ? 'bg-amber-100 text-amber-900'
-                          : 'bg-emerald-100 text-emerald-900'
+                          ? 'bg-amber-300/20 text-amber-200'
+                          : 'bg-emerald-300/20 text-emerald-200'
                     }`}
                   >
                     {item.severity}
@@ -644,7 +815,7 @@ export default function MePage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border border-zinc-700 bg-zinc-950/75 p-5 shadow-sm">
         <h2 className="text-lg font-semibold">SOP activation for selected case</h2>
         <div className="mt-3 space-y-2 text-sm">
           {sopList.map((sop) => (
@@ -657,17 +828,17 @@ export default function MePage() {
                     : sop.priority === 'medium'
                       ? 'border-amber-200 bg-amber-50'
                       : 'border-emerald-200 bg-emerald-50'
-                  : 'border-black/10 bg-white'
+                  : 'border-zinc-700 bg-zinc-900/70'
               }`}
             >
               <div className="flex items-center justify-between gap-2">
                 <p className="font-medium">{sop.name}</p>
-                <span className="rounded bg-black/5 px-2 py-0.5 text-xs">
+                <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs">
                   {sop.active ? 'Activated' : 'Standby'}
                 </span>
               </div>
-              <p className="mt-1 text-zinc-700">Trigger: {sop.trigger}</p>
-              <p className="text-zinc-700">Action: {sop.action}</p>
+              <p className="mt-1 text-zinc-300">Trigger: {sop.trigger}</p>
+              <p className="text-zinc-300">Action: {sop.action}</p>
             </div>
           ))}
         </div>
@@ -686,15 +857,15 @@ export default function MePage() {
         </div>
       ) : null}
 
-      <div className="rounded-xl border border-black/10 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border border-zinc-700 bg-zinc-950/75 p-5 shadow-sm">
         <h2 className="text-lg font-semibold">All-patients command dashboard</h2>
-        <p className="mt-1 text-sm text-zinc-600">
+        <p className="mt-1 text-sm text-zinc-400">
           Scenario-wide triage with SOP counts and hidden warning signals.
         </p>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-black/10 text-zinc-600">
+              <tr className="border-b border-zinc-700 text-zinc-400">
                 <th className="py-2">Patient ID</th>
                 <th className="py-2">Name</th>
                 <th className="py-2">Location</th>
@@ -706,7 +877,7 @@ export default function MePage() {
             </thead>
             <tbody>
               {allPatientsDashboard.map((row) => (
-                <tr key={row.id} className="border-b border-black/5">
+                <tr key={row.id} className="border-b border-zinc-800">
                   <td className="py-2 font-medium">{row.id}</td>
                   <td className="py-2">{row.name}</td>
                   <td className="py-2">{row.location}</td>
@@ -714,10 +885,10 @@ export default function MePage() {
                     <span
                       className={`rounded px-2 py-0.5 text-xs ${
                         row.risk >= 70
-                          ? 'bg-rose-100 text-rose-900'
+                          ? 'bg-rose-300/20 text-rose-200'
                           : row.risk >= 40
-                            ? 'bg-amber-100 text-amber-900'
-                            : 'bg-emerald-100 text-emerald-900'
+                            ? 'bg-amber-300/20 text-amber-200'
+                            : 'bg-emerald-300/20 text-emerald-200'
                       }`}
                     >
                       {row.risk}/100
@@ -740,12 +911,12 @@ export default function MePage() {
                     <span
                       className={`rounded px-2 py-0.5 text-xs ${
                         row.activeSops >= 3
-                          ? 'bg-rose-100 text-rose-900'
+                          ? 'bg-rose-300/20 text-rose-200'
                           : row.activeSops >= 2
-                            ? 'bg-amber-100 text-amber-900'
+                            ? 'bg-amber-300/20 text-amber-200'
                             : row.activeSops >= 1
-                            ? 'bg-emerald-100 text-emerald-900'
-                            : 'bg-zinc-100 text-zinc-700'
+                            ? 'bg-emerald-300/20 text-emerald-200'
+                            : 'bg-zinc-800 text-zinc-300'
                       }`}
                     >
                       {row.activeSops} activated
@@ -758,7 +929,7 @@ export default function MePage() {
         </div>
       </div>
 
-      <p className="text-xs text-zinc-500">
+      <p className="text-xs text-zinc-400">
         Clinical evidence logic in this prototype uses guideline-like thresholds (BP, HbA1c, CRP, LDL,
         adherence). It supports decision awareness and triage, not standalone medical diagnosis.
       </p>
