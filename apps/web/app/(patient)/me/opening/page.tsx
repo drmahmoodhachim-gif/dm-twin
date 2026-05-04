@@ -3,7 +3,25 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
+type TeamMember = {
+  name: string
+  role: string
+  focus: string
+  image: string
+  contact?: string
+  bio?: string
+}
+
 const PI_TEAM = [
+  {
+    name: 'Mahmood Yaseen Hachim Al Mashhadani',
+    role: 'Assistant Professor - Molecular Medicine | Overall PI and Twin Maker',
+    focus:
+      'Principal leadership for molecular medicine strategy, translational pathways, and predictive biomarker development.',
+    image: '/team/your-profile.png',
+    contact: 'Contact Faculty: +9714 383 8729',
+    bio: 'Dr. Mahmood Hachim has multidisciplinary backgrounds that shaped his medical degree and research career. With two Ph.D. in molecular medicine and translation research from University of Sharjah and Lubeck University in Germany, Master of research in cancer biology from University of Dundee and Master of Science in Medical Microbiology and Immunology from Al Nahrain University in Iraq, Dr. Mahmood made a research track and experience in systems biology to apply its advances to decipher complex diseases like breast cancer, diabetes, Asthma as well as an understanding of the human microbiome by applying novel bioinformatics approaches and state of the art omics approach. Understanding the molecular basis of such diseases to identify novel diagnostic and predictive clinically proven biomarkers is his goal. Specifically, understanding the exact role of host immune response and microbiome interaction in susceptibility and development of clinical heterogeneity of such chronic diseases.',
+  },
   {
     name: 'Dr. Dima Abdelmannan',
     role: 'Co-Principal Investigator (Co-PI)',
@@ -11,18 +29,12 @@ const PI_TEAM = [
     image: '/team/dr-dima-abdelmannan.png',
   },
   {
-    name: 'You',
-    role: 'Principal Investigator (PI)',
-    focus: 'Principal leadership for program strategy, stakeholder coordination, and deployment direction.',
-    image: '/team/your-profile.png',
-  },
-  {
     name: 'Remote Monitoring Unit',
     role: 'Operations',
     focus: 'Daily monitoring workflows, escalation, and SOP execution',
     image: 'https://api.dicebear.com/8.x/initials/svg?seed=Remote+Monitoring+Unit&backgroundType=gradientLinear',
   },
-]
+] satisfies TeamMember[]
 
 const FLOW_STEPS = [
   'Patient and caregiver submit daily inputs',
@@ -64,6 +76,8 @@ export default function OpeningPage() {
               <p className="mt-3 font-semibold text-cyan-100">{member.name}</p>
               <p className="text-xs text-indigo-200">{member.role}</p>
               <p className="mt-2 text-xs text-zinc-300">{member.focus}</p>
+              {member.contact ? <p className="mt-2 text-xs font-medium text-cyan-200">{member.contact}</p> : null}
+              {member.bio ? <p className="mt-2 text-xs leading-relaxed text-zinc-300">{member.bio}</p> : null}
             </article>
           ))}
         </div>
