@@ -22,6 +22,7 @@ export function TopBar({ role }: TopBarProps) {
   const navItems = [
     { href: '/research', label: 'Research', roles: ['researcher', 'admin'] },
     { href: '/clinic', label: 'Clinic', roles: ['clinician', 'admin'] },
+    { href: '/me/opening', label: 'Opening', roles: ['patient', 'admin'] },
     { href: '/me/start', label: 'Start', roles: ['patient', 'admin'] },
     { href: '/me', label: 'Me', roles: ['patient', 'admin'] },
   ].filter((item) => item.roles.includes(role))

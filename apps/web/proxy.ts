@@ -5,7 +5,7 @@ const ROLE_HOME: Record<string, string> = {
   researcher: '/research',
   admin: '/research',
   clinician: '/clinic',
-  patient: '/me',
+  patient: '/me/opening',
 }
 
 export async function proxy(request: NextRequest) {
@@ -16,7 +16,7 @@ export async function proxy(request: NextRequest) {
   if (demoBypassAuth) {
     if (pathname === '/' || pathname === '/login') {
       const redirectUrl = request.nextUrl.clone()
-      redirectUrl.pathname = '/me'
+      redirectUrl.pathname = '/me/opening'
       return NextResponse.redirect(redirectUrl)
     }
     return NextResponse.next({ request })
