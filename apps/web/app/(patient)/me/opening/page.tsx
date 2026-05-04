@@ -6,15 +6,15 @@ import { useEffect, useState } from 'react'
 const PI_TEAM = [
   {
     name: 'Dr. Dima Abdelmannan',
-    role: 'Consultant, Endocrinology and me',
-    focus: 'Principal investigator leadership for endocrine clinical direction and patient-centered outcomes.',
+    role: 'Co-Principal Investigator (Co-PI)',
+    focus: 'Endocrinology co-lead for clinical direction and patient-centered outcomes.',
     image: '/team/dr-dima-abdelmannan.png',
   },
   {
-    name: 'Clinical AI Team',
-    role: 'Research & Modeling',
-    focus: 'Signal fusion, deterioration detection, and triage interpretation',
-    image: 'https://api.dicebear.com/8.x/initials/svg?seed=Clinical+AI+Team&backgroundType=gradientLinear',
+    name: 'You',
+    role: 'Principal Investigator (PI)',
+    focus: 'Principal leadership for program strategy, stakeholder coordination, and deployment direction.',
+    image: '/team/your-profile.png',
   },
   {
     name: 'Remote Monitoring Unit',
