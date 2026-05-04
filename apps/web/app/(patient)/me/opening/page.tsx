@@ -12,7 +12,7 @@ type TeamMember = {
   bio?: string
 }
 
-const PI_TEAM = [
+const PI_TEAM: TeamMember[] = [
   {
     name: 'Mahmood Yaseen Hachim Al Mashhadani',
     role: 'Assistant Professor - Molecular Medicine | Overall PI and Twin Maker',
@@ -20,7 +20,6 @@ const PI_TEAM = [
       'Principal leadership for molecular medicine strategy, translational pathways, and predictive biomarker development.',
     image: '/team/your-profile.png',
     contact: 'Contact Faculty: +9714 383 8729',
-    bio: 'Dr. Mahmood Hachim has multidisciplinary backgrounds that shaped his medical degree and research career. With two Ph.D. in molecular medicine and translation research from University of Sharjah and Lubeck University in Germany, Master of research in cancer biology from University of Dundee and Master of Science in Medical Microbiology and Immunology from Al Nahrain University in Iraq, Dr. Mahmood made a research track and experience in systems biology to apply its advances to decipher complex diseases like breast cancer, diabetes, Asthma as well as an understanding of the human microbiome by applying novel bioinformatics approaches and state of the art omics approach. Understanding the molecular basis of such diseases to identify novel diagnostic and predictive clinically proven biomarkers is his goal. Specifically, understanding the exact role of host immune response and microbiome interaction in susceptibility and development of clinical heterogeneity of such chronic diseases.',
   },
   {
     name: 'Dr. Dima Abdelmannan',
@@ -34,14 +33,14 @@ const PI_TEAM = [
     focus: 'Daily monitoring workflows, escalation, and SOP execution',
     image: 'https://api.dicebear.com/8.x/initials/svg?seed=Remote+Monitoring+Unit&backgroundType=gradientLinear',
   },
-] satisfies TeamMember[]
+]
 
 const FLOW_STEPS = [
   'Patient and caregiver submit daily inputs',
   'Twin engine fuses glycemic and behavior signals',
   'Risk and hidden-warning patterns are detected',
   'Care-team receives triage with SOP recommendations',
-]
+] 
 
 export default function OpeningPage() {
   const [activeStep, setActiveStep] = useState(0)
